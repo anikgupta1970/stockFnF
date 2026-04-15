@@ -265,14 +265,15 @@ def _determine_outcome(entry: float, stop: float, target: float,
         return "open", None, None
 
     for idx, row in df.iterrows():
-        high = float(row["High"])
-        low  = float(row["Low"])
-        ts   = str(idx)
+        high  = float(row["High"])
+        low   = float(row["Low"])
+        close = float(row["Close"])
+        ts    = str(idx)
 
         if low <= stop:
-            return "stop_hit", ts, round(stop, 2)
+            return "stop_hit", ts, round(close, 2)
         if high >= target:
-            return "target_hit", ts, round(target, 2)
+            return "target_hit", ts, round(close, 2)
 
     last_close = float(df["Close"].iloc[-1])
     last_ts    = str(df.index[-1])
@@ -390,26 +391,30 @@ def _show_summary(records: list):
     }
 
     tbl = Table(title="Prediction Outcomes", box=box.SIMPLE_HEAVY)
-    tbl.add_column("Ticker",      style="bold cyan", no_wrap=True)
-    tbl.add_column("Mode",        justify="center",  no_wrap=True)
-    tbl.add_column("Date",        no_wrap=True)
-    tbl.add_column("Score",       justify="right")
-    tbl.add_column("Entry ₹",     justify="right")
-    tbl.add_column("Stop ₹",      justify="right")
-    tbl.add_column("Target ₹",    justify="right")
-    tbl.add_column("Outcome",     justify="center")
-    tbl.add_column("Ref Price ₹", justify="right")   # price used to calculate return
-    tbl.add_column("Hit at",      no_wrap=True)
-    tbl.add_column("Return",      justify="right")
+    tbl.add_column("Ticker",              style="bold cyan", no_wrap=True)
+    tbl.add_column("Mode",               justify="center",  no_wrap=True)
+    tbl.add_column("Date",               no_wrap=True)
+    tbl.add_column("Score",              justify="right")
+    tbl.add_column("Entry ₹",            justify="right")
+    tbl.add_column("Stop ₹",             justify="right")
+    tbl.add_column("Target ₹",           justify="right")
+    tbl.add_column("Outcome",            justify="center")
+    tbl.add_column("Ref Price ₹",        justify="right")
+    tbl.add_column("Ref Timestamp",      no_wrap=True)
+    tbl.add_column("Return",             justify="right")
 
     sorted_records = sorted(records, key=lambda r: r["date"], reverse=True)
     for r in sorted_records:
-        ret_str  = ""
-        ref_str  = "—"
+        ret_str   = ""
+        ref_str   = "—"
+        ref_ts    = "—"
         out_price = r.get("outcome_price")
+        out_date  = r.get("outcome_date")
 
         if out_price is not None:
             ref_str = f"₹{out_price:.2f}"
+        if out_date is not None:
+            ref_ts = str(out_date)[:16]   # trim to minute precision
 
         if r["actual_return_pct"] is not None:
             v = r["actual_return_pct"]
@@ -428,7 +433,7 @@ def _show_summary(records: list):
             f"₹{r['target']:.2f}" if r.get("target") else "—",
             STATUS_STYLE.get(r["outcome"], r["outcome"]),
             ref_str,
-            (r["outcome_date"] or "—")[:16],
+            ref_ts,
             ret_str or "—",
         )
 
