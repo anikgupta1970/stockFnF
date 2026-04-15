@@ -105,42 +105,62 @@ python3 main.py general --index nifty50 --no-cache
 ### `predict.py` commands
 
 ```bash
-# Record today's top picks (score ≥ 65) from NIFTY 50
-python3 predict.py record
+# ── General (multi-day) picks ──────────────────────────────────────────────
 
-# Record only top 10 picks
-python3 predict.py record --top 10
+# Record NIFTY 50 general picks (score ≥ 65)
+python3 predict.py record --mode general
 
-# Stricter — only high-conviction picks (score ≥ 70)
-python3 predict.py record --threshold 70 --top 10
+# Top 10 only, stricter threshold
+python3 predict.py record --mode general --top 10 --threshold 68
 
-# Record from full NSE universe
-python3 predict.py record --index all --top 20
+# Full NSE universe
+python3 predict.py record --mode general --index all --top 20
 
-# Check all open predictions — did they hit target or stop?
+# ── Intraday / swing picks (1-5 day trades) ───────────────────────────────
+
+# Record NIFTY 50 intraday picks (1h candles)
+python3 predict.py record --mode intraday
+
+# Top 10, stricter threshold
+python3 predict.py record --mode intraday --top 10 --threshold 68
+
+# ── Evaluate ──────────────────────────────────────────────────────────────
+
+# Evaluate all open predictions (auto-uses daily or 1h candles per pick)
 python3 predict.py evaluate
 
 # View current state without fetching new prices
 python3 predict.py list
 
-# Use a separate file (e.g. for swing picks)
-python3 predict.py record --file swing_predictions.json
-python3 predict.py evaluate --file swing_predictions.json
+# ── Separate files per mode (recommended) ────────────────────────────────
+
+python3 predict.py record --mode general  --file general_preds.json
+python3 predict.py record --mode intraday --file intraday_preds.json
+python3 predict.py evaluate --file general_preds.json
+python3 predict.py evaluate --file intraday_preds.json
 ```
+
+> **Important for intraday:** Yahoo Finance only keeps ~60 days of 1-hour candle history.
+> Run `evaluate` within 60 days of recording intraday picks or they will show as `OPEN` permanently.
 
 ### Typical daily workflow
 
 ```bash
 source venv/bin/activate
 
-# Morning — see today's top picks
-python3 main.py general --index nifty50 --top 20
+# Morning — see today's top picks (both modes)
+python3 main.py general  --index nifty50 --top 20
+python3 main.py intraday --index nifty50 --top 10
 
-# Record the picks you want to track
-python3 predict.py record --top 10 --threshold 68
+# Record picks you want to track
+python3 predict.py record --mode general  --top 10 --threshold 68 --file general_preds.json
+python3 predict.py record --mode intraday --top 10 --threshold 65 --file intraday_preds.json
 
-# A few days later — check how they did
-python3 predict.py evaluate
+# Same day or next day — check intraday results
+python3 predict.py evaluate --file intraday_preds.json
+
+# After 5+ days — check general results
+python3 predict.py evaluate --file general_preds.json
 ```
 
 ### Key output to watch
@@ -219,7 +239,7 @@ python3 main.py general --index nifty50 --no-cache
 
 ### `predict.py` — Prediction Tracker
 
-Records today's top picks with their trade levels and later evaluates whether the price hit the target or stop-loss.
+Records top picks (general or intraday) with their trade levels and later evaluates whether the price hit the target or stop-loss. Both modes are supported in the same file or separate files.
 
 ```
 python3 predict.py <command> [options]
@@ -227,7 +247,7 @@ python3 predict.py <command> [options]
 
 | Command | What it does |
 |---|---|
-| `record` | Run analysis and save qualifying picks to `predictions.json` |
+| `record` | Run analysis and save qualifying picks to a JSON file |
 | `evaluate` | Fetch price history for all open picks and determine outcomes |
 | `list` | Print current state of all predictions without fetching new data |
 
@@ -235,35 +255,27 @@ python3 predict.py <command> [options]
 
 | Option | Default | Description |
 |---|---|---|
+| `--mode` | `general` | `general` (daily candles) or `intraday` (1h candles) |
 | `--top N` | all | Record only the top N picks |
 | `--threshold SCORE` | 65 | Minimum score to record a pick |
 | `--index` | `nifty50` | Stock universe (`nifty50` or `all`) |
 | `--file PATH` | `predictions.json` | Custom file path for storing predictions |
 
-**Workflow**
-
-```bash
-# Day 1 — record today's high-conviction picks (score ≥ 70, top 10)
-python3 predict.py record --top 10 --threshold 70
-
-# Any day after — evaluate all open predictions
-python3 predict.py evaluate
-
-# Just view the current state without fetching prices
-python3 predict.py list
-```
-
 **Outcome logic**
 
-For each open prediction the script walks forward through daily OHLC data:
-- If the day's **low** touches or crosses the **stop** → `STOP HIT` (loss)
-- If the day's **high** touches or crosses the **target** → `TARGET HIT` (win)
-- If both happen on the same day → `STOP HIT` (conservative)
+For each open prediction the script walks forward bar-by-bar through price history:
+- If the bar's **low** touches or crosses the **stop** → `STOP HIT` (loss)
+- If the bar's **high** touches or crosses the **target** → `TARGET HIT` (win)
+- If both happen in the same bar → `STOP HIT` (conservative)
 - If neither has happened yet → `OPEN` (shows current price and unrealised P&L)
 
-Results include a win-rate summary and a sector breakdown of closed trades.
+General picks use **daily** candles. Intraday picks use **1h** candles for finer-grained evaluation.
 
-**Predictions are stored in `predictions.json`** — a plain JSON file you can open in any editor or import into Excel/Sheets.
+> **Intraday limit:** Yahoo Finance only retains ~60 days of 1h history. Evaluate intraday picks within that window.
+
+Results include overall win rate, per-mode win rate, and a sector breakdown of closed trades.
+
+**Predictions are stored as JSON** — open in any editor or import into Excel/Sheets.
 
 ---
 
