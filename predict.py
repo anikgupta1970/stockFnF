@@ -39,7 +39,7 @@ from indicators import add_all_indicators, add_all_indicators_swing, add_regime_
 from scorer import score_stock, score_stock_swing, rank_stocks
 
 PREDICTIONS_FILE = Path("predictions.json")
-console = Console()
+console = Console(width=180)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -390,20 +390,27 @@ def _show_summary(records: list):
     }
 
     tbl = Table(title="Prediction Outcomes", box=box.SIMPLE_HEAVY)
-    tbl.add_column("Ticker",   style="bold cyan", no_wrap=True)
-    tbl.add_column("Mode",     justify="center",  no_wrap=True)
-    tbl.add_column("Date",     no_wrap=True)
-    tbl.add_column("Score",    justify="right")
-    tbl.add_column("Entry",    justify="right")
-    tbl.add_column("Stop",     justify="right")
-    tbl.add_column("Target",   justify="right")
-    tbl.add_column("Outcome",  justify="center")
-    tbl.add_column("Hit at",   no_wrap=True)
-    tbl.add_column("Return",   justify="right")
+    tbl.add_column("Ticker",      style="bold cyan", no_wrap=True)
+    tbl.add_column("Mode",        justify="center",  no_wrap=True)
+    tbl.add_column("Date",        no_wrap=True)
+    tbl.add_column("Score",       justify="right")
+    tbl.add_column("Entry ₹",     justify="right")
+    tbl.add_column("Stop ₹",      justify="right")
+    tbl.add_column("Target ₹",    justify="right")
+    tbl.add_column("Outcome",     justify="center")
+    tbl.add_column("Ref Price ₹", justify="right")   # price used to calculate return
+    tbl.add_column("Hit at",      no_wrap=True)
+    tbl.add_column("Return",      justify="right")
 
     sorted_records = sorted(records, key=lambda r: r["date"], reverse=True)
     for r in sorted_records:
-        ret_str = ""
+        ret_str  = ""
+        ref_str  = "—"
+        out_price = r.get("outcome_price")
+
+        if out_price is not None:
+            ref_str = f"₹{out_price:.2f}"
+
         if r["actual_return_pct"] is not None:
             v = r["actual_return_pct"]
             ret_str = f"[{'green' if v > 0 else 'red'}]{v:+.2f}%[/{'green' if v > 0 else 'red'}]"
@@ -420,7 +427,8 @@ def _show_summary(records: list):
             f"₹{r['stop']:.2f}"  if r.get("stop")  else "—",
             f"₹{r['target']:.2f}" if r.get("target") else "—",
             STATUS_STYLE.get(r["outcome"], r["outcome"]),
-            (r["outcome_date"] or "—")[:16],   # trim timestamp to minute
+            ref_str,
+            (r["outcome_date"] or "—")[:16],
             ret_str or "—",
         )
 
