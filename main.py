@@ -55,7 +55,56 @@ Examples:
                    help="Stock universe (default: all ~2100 NSE equities)")
     p.add_argument("--no-cache", action="store_true",
                    help="Ignore cached data, re-download everything")
+    p.add_argument("--no-market-filter", action="store_true",
+                   help="Skip NIFTY 50 uptrend check and analyse regardless of market direction")
+    p.add_argument("--strict", action="store_true",
+                   help="Confluence filter: only show stocks where MACD bullish + Golden cross + RSI<65 + Score>=70")
     return p.parse_args()
+
+
+def check_market_regime(use_cache: bool = True) -> bool:
+    """
+    Returns True if NIFTY 50 (^NSEI) is above its 50-day MA (uptrend).
+    Prints a warning and returns False if in downtrend.
+    """
+    df = fetch_ticker_data("^NSEI", "6mo", "1d", use_cache)
+    if df.empty or len(df) < 50:
+        console.print("[yellow]Could not fetch NIFTY index data — skipping market filter.[/yellow]")
+        return True
+    ma50       = df["Close"].rolling(50).mean().iloc[-1]
+    last_close = df["Close"].iloc[-1]
+    if last_close < ma50:
+        console.print(
+            f"\n[bold red]⚠  Market in downtrend[/bold red] — "
+            f"NIFTY ₹{last_close:,.1f} is below its 50-day MA ₹{ma50:,.1f}. "
+            f"[dim]Signals are unreliable in a falling market.[/dim]"
+        )
+        return False
+    console.print(
+        f"[dim]Market uptrend confirmed — NIFTY ₹{last_close:,.1f} above 50-day MA ₹{ma50:,.1f}.[/dim]"
+    )
+    return True
+
+
+def apply_confluence_filter(ranked: list) -> tuple:
+    """
+    Split ranked list into (strong, weak).
+    Strong requires ALL four conditions:
+      1. MACD bullish
+      2. Golden cross on MA
+      3. RSI < 65  (not overbought)
+      4. Score >= 70
+    """
+    strong, weak = [], []
+    for r in ranked:
+        passes = (
+            r.get("macd_bullish", False) and
+            r.get("ma_cross") == "Golden" and
+            r.get("rsi", 100) < 65 and
+            r.get("score", 0) >= 70
+        )
+        (strong if passes else weak).append(r)
+    return strong, weak
 
 
 def get_tickers(index: str) -> list:
@@ -81,6 +130,16 @@ def main():
     min_rows = SWING_MIN_ROWS if is_swing else 60
 
     tickers = get_tickers(args.index)
+
+    # ── Market regime filter ──────────────────────────────────────────────────
+    if not args.no_market_filter:
+        in_uptrend = check_market_regime(use_cache)
+        if not in_uptrend:
+            ans = input("\nMarket is in downtrend. Continue anyway? [y/N] ").strip().lower()
+            if ans != "y":
+                console.print("[dim]Exiting. Use --no-market-filter to skip this check.[/dim]")
+                sys.exit(0)
+            console.print()
 
     mode_label = "[yellow]INTRADAY[/yellow]" if is_swing else "[blue]GENERAL[/blue]"
     console.print(
@@ -156,6 +215,25 @@ def main():
 
     ranked = rank_stocks(scored)
 
+    # ── Confluence filter (--strict) ──────────────────────────────────────────
+    weak = []
+    if args.strict:
+        ranked, weak = apply_confluence_filter(ranked)
+        console.print(f"[dim]Confluence filter: {len(ranked)} strong signal(s), {len(weak)} excluded[/dim]")
+        if not ranked:
+            console.print(
+                "\n[yellow]No stocks passed all 4 confluence conditions today.[/yellow]\n"
+                "[dim]Conditions: Score ≥ 70 · MACD bullish · Golden cross · RSI < 65[/dim]\n"
+                "[dim]Re-run without --strict to see all results.[/dim]"
+            )
+            if weak:
+                closest = ", ".join(
+                    f"{r['ticker'].replace('.NS','')} ({r['score']:.0f})"
+                    for r in weak[:5]
+                )
+                console.print(f"[dim]Closest misses: {closest}[/dim]")
+            sys.exit(0)
+
     # Optional sector filter
     if args.sector:
         sl     = args.sector.strip().lower()
@@ -175,6 +253,16 @@ def main():
     else:
         render_table(ranked, top_n, SECTOR_MAP, show_regime=True)
         render_summary(ranked, SECTOR_MAP, errors)
+
+    if weak and args.strict:
+        excluded = ", ".join(
+            f"{r['ticker'].replace('.NS','')} ({r['score']:.0f})"
+            for r in weak[:15]
+        )
+        console.print(
+            f"\n[dim]── {len(weak)} stocks excluded by --strict filter: "
+            f"{excluded}{'…' if len(weak) > 15 else ''}[/dim]"
+        )
 
     # ── Backtest (general mode only) ──────────────────────────────────────────
     if not is_swing:

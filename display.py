@@ -256,20 +256,28 @@ def render_backtest(results: dict, top_n: int = 20) -> None:
     by_ticker = results.get("by_ticker", {})
 
     # Aggregate panel
+    ec     = agg.get("exit_counts", {})
+    sharpe = agg.get("sharpe", float("nan"))
     lines = [
         f"[bold]Stocks backtested:[/bold]  {agg.get('n_stocks', 0)}",
         f"[bold]Total trades:[/bold]       {agg.get('n_trades', 0)}",
         f"[bold]Sharpe ratio:[/bold]       "
-        + (f"{agg['sharpe']:.2f}  [dim](>1.0 good, >2.0 excellent)[/dim]"
-           if agg.get('sharpe') == agg.get('sharpe') and agg.get('n_trades',0) >= 3
-           else "[dim]N/A (need ≥3 trades — lower --bt-threshold)[/dim]"),
+        + (f"{sharpe:.2f}  [dim](>1.0 good, >2.0 excellent)[/dim]"
+           if sharpe == sharpe and agg.get('n_trades', 0) >= 3
+           else "[dim]N/A (need ≥3 trades)[/dim]"),
         f"[bold]Win rate:[/bold]           {agg.get('win_rate', 0):.1f}%",
         f"[bold]Avg return/trade:[/bold]   {agg.get('avg_return_pct', 0):.2f}%",
+        f"[bold]Avg days held:[/bold]      {agg.get('avg_days_held', 0):.1f}",
         f"[bold]Max drawdown:[/bold]       {agg.get('max_drawdown_pct', 0):.1f}%",
         f"[bold]Total return:[/bold]       {agg.get('total_return_pct', 0):.1f}%",
         "",
-        "[dim]Backtest: buy when score ≥ threshold, sell after 5 days. "
-        "No lookahead bias.[/dim]",
+        f"[bold]Exit reasons:[/bold]       "
+        f"[red]Stop {ec.get('stop', 0)}[/red]  "
+        f"[green]Target {ec.get('target', 0)}[/green]  "
+        f"[dim]Max-hold {ec.get('max_hold', 0)}[/dim]",
+        "",
+        "[dim]Backtest: buy when score ≥ threshold, exit at stop (1.5×ATR), "
+        "target (2.5×ATR), or 10-day max. No lookahead bias.[/dim]",
     ]
     console.print(Panel("\n".join(lines), title="[bold cyan]Backtest Results — Aggregate[/bold cyan]",
                         border_style="cyan", width=80))

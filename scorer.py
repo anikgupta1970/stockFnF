@@ -158,18 +158,34 @@ def score_row(row: pd.Series, weights: dict) -> float:
 
 # ── ATR-based trade levels (shared by both modes) ─────────────────────────────
 
+# Target ATR multiplier varies by regime — stop stays fixed at ATR_MULTIPLIER_STOP
+_TARGET_BY_REGIME = {
+    "trending": 3.5,   # R:R = 3.5/1.5 = 2.33  — trend has more room to run
+    "neutral":  2.5,   # R:R = 2.5/1.5 = 1.67  — default
+    "ranging":  2.0,   # R:R = 2.0/1.5 = 1.33  — tighter, mean-reversion
+}
+
+
 def _trade_levels(close: float, atr: float,
                   stop_mult: float = ATR_MULTIPLIER_STOP,
-                  target_mult: float = ATR_MULTIPLIER_TARGET) -> dict:
-    if np.isnan(atr) or atr <= 0:
+                  target_mult: float = ATR_MULTIPLIER_TARGET,
+                  regime: str = "neutral") -> dict:
+    if np.isnan(atr) or atr <= 0 or np.isnan(close) or close <= 0:
         nan = float("nan")
         return {"entry": close, "stop": nan, "target": nan,
                 "risk_pct": nan, "reward_pct": nan, "rr_ratio": nan}
-    stop   = close - stop_mult   * atr
-    target = close + target_mult * atr
+
+    # Stop: always 1.5 × ATR — risk% varies naturally per stock's volatility
+    stop = close - stop_mult * atr
+
+    # Target: multiplier depends on regime
+    effective_target_mult = _TARGET_BY_REGIME.get(regime, target_mult)
+    target = close + effective_target_mult * atr
+
     risk   = (close - stop)   / close * 100
     reward = (target - close) / close * 100
     rr     = reward / risk if risk > 0 else float("nan")
+
     return {
         "entry":      round(close,  2),
         "stop":       round(stop,   2),
@@ -237,7 +253,7 @@ def score_stock(df: pd.DataFrame, weights: dict = None,
 
     close = last.get("Close", float("nan"))
     atr   = last.get("atr",   float("nan"))
-    levels = _trade_levels(float(close), float(atr))
+    levels = _trade_levels(float(close), float(atr), regime=current_regime)
 
     return {
         "score":       round(composite, 1),
@@ -288,7 +304,7 @@ def score_stock_swing(df: pd.DataFrame) -> dict:
 
     close = float(last.get("Close", float("nan")))
     atr   = float(last.get("atr",   float("nan")))
-    levels = _trade_levels(close, atr)
+    levels = _trade_levels(close, atr, regime="neutral")  # intraday: no regime
 
     vwap       = last.get("vwap", float("nan"))
     above_vwap = (close > vwap) if not np.isnan(vwap) else None

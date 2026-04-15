@@ -10,10 +10,12 @@ A fully algorithmic, terminal-based tool for analysing NSE-listed Indian stocks.
 |---|---|
 | **General mode** | Daily candles · scores every stock · regime-aware weights · fundamentals blend |
 | **Intraday/Swing mode** | 1-hour candles · VWAP · Stochastic · optimised for 1-5 day trades |
-| **ATR-based trade levels** | Entry, stop-loss, and target calculated from Average True Range |
-| **Market regime detection** | ADX classifies each stock as Trending / Ranging / Neutral and adjusts signal weights |
+| **ATR-based trade levels** | Entry, stop-loss, and target calculated from Average True Range — target multiplier varies by regime |
+| **Market regime detection** | ADX classifies each stock as Trending / Ranging / Neutral and adjusts signal weights and R:R |
+| **Market uptrend filter** | Checks NIFTY 50 vs 50-day MA before analysis — warns when market is in downtrend |
+| **Signal confluence filter** | `--strict` flag: only shows stocks where MACD bullish + Golden cross + RSI<65 + Score≥70 all agree |
 | **Fundamental scoring** | P/E, P/B, Revenue Growth, Debt/Equity, Profit Margin blended at 20% |
-| **Built-in backtester** | Walk-forward, no lookahead bias, Sharpe ratio + drawdown metrics |
+| **Built-in backtester** | Walk-forward, no lookahead bias; exits at ATR stop/target or max 10 days — Sharpe + drawdown |
 | **Prediction tracker** | Record today's picks, evaluate later whether stop or target was hit |
 | **Smart caching** | OHLCV cached for 4h, fundamentals for 24h — fast repeated runs |
 | **Full NSE universe** | Analyses ~2,100 NSE equities or NIFTY 50 only (your choice) |
@@ -98,6 +100,12 @@ python3 main.py intraday --index all --top 20
 
 # Force fresh data download (bypass 4h cache)
 python3 main.py general --index nifty50 --no-cache
+
+# Skip NIFTY market direction check (useful in sideways markets)
+python3 main.py general --index nifty50 --no-market-filter
+
+# Only show stocks where all 4 conditions align (strongest signals)
+python3 main.py general --index nifty50 --strict
 ```
 
 **Valid sector names:** `Banking`, `IT`, `Pharma`, `Auto`, `FMCG`, `Energy`, `Metals`, `Infrastructure`, `Consumer`, `Financial Services`, `Insurance`, `Telecom`, `Cement`, `Chemicals`, `Diversified`
@@ -153,9 +161,15 @@ python3 predict.py evaluate --file intraday_preds.json
 ```bash
 source venv/bin/activate
 
-# Morning — see today's top picks (both modes)
-python3 main.py general  --index nifty50 --top 20
+# Morning — check market direction first, then see top picks
+python3 main.py general  --index nifty50 --top 20          # includes automatic market uptrend check
 python3 main.py intraday --index nifty50 --top 10
+
+# High-conviction picks only (all signals must agree)
+python3 main.py general  --index nifty50 --strict
+
+# If market is in downtrend but you still want to analyse
+python3 main.py general  --index nifty50 --no-market-filter --top 20
 
 # Record picks you want to track (add --no-cache to force fresh data)
 python3 predict.py record --mode general  --top 10 --threshold 68 --file general_preds.json
@@ -167,6 +181,16 @@ python3 predict.py evaluate --file intraday_preds.json
 # After 5+ days — check general results
 python3 predict.py evaluate --file general_preds.json
 ```
+
+### When to use `--strict`
+
+The `--strict` flag requires **all four conditions** to hold simultaneously:
+- Score ≥ 70
+- MACD bullish (MACD above signal line)
+- Golden cross (20-day MA above 50-day MA)
+- RSI < 65 (not overbought)
+
+Use `--strict` when you want only the highest-conviction setups, e.g. before deploying larger capital or when the market itself is in a confirmed uptrend. On most days, fewer than 5 NIFTY 50 stocks will pass all four conditions.
 
 ### Key output to watch
 
@@ -199,6 +223,8 @@ python3 main.py <mode> [options]
 | `--sector NAME` | Banking, IT, Pharma, Auto, FMCG … | Filter results to one sector |
 | `--index` | `nifty50` / `all` | NIFTY 50 only (~50 stocks, fast) or full NSE (~2,100 stocks, slow first run) |
 | `--no-cache` | flag | Force fresh data download, ignore disk cache |
+| `--no-market-filter` | flag | Skip the NIFTY 50 uptrend check — useful in sideways or recovering markets |
+| `--strict` | flag | Only show stocks meeting ALL 4 confluence conditions (strongest signals) |
 
 **Examples**
 
@@ -214,6 +240,12 @@ python3 main.py intraday --index nifty50 --top 10
 
 # Force fresh data (ignore cache)
 python3 main.py general --index nifty50 --no-cache
+
+# Only show highest-conviction picks (all 4 conditions must agree)
+python3 main.py general --index nifty50 --strict
+
+# Run even when market is in downtrend
+python3 main.py general --index nifty50 --no-market-filter --top 20
 ```
 
 **Output columns — General mode**
@@ -223,9 +255,9 @@ python3 main.py general --index nifty50 --no-cache
 | Score | 0-100 composite buy probability (≥70 strong, 55-69 watch, <55 avoid) |
 | Entry ₹ | Current close price — suggested entry |
 | Stop ₹ | Stop-loss level (entry − 1.5 × ATR) |
-| Target ₹ | Take-profit level (entry + 2.5 × ATR) |
-| Risk % | % distance from entry to stop |
-| R:R | Reward-to-risk ratio (prefer ≥ 1.5) |
+| Target ₹ | Take-profit level — multiplier varies by regime: Trending 3.5×ATR, Neutral 2.5×ATR, Ranging 2.0×ATR |
+| Risk % | % distance from entry to stop (varies per stock's ATR) |
+| R:R | Reward-to-risk ratio — Trending 2.3, Neutral 1.7, Ranging 1.3 |
 | Regime | Trending / Ranging / Neutral (affects signal weights) |
 | RSI | 14-day RSI — green if oversold (<30), red if overbought (>70) |
 | MACD | Bull ▲ if MACD is above its signal line |
@@ -335,8 +367,8 @@ All tunable parameters are in `config.py`:
 |---|---|---|
 | `SCORE_WEIGHTS` | `rsi:0.25, macd:0.25, bb:0.20, ma:0.20, volume:0.10` | Weights for the composite score |
 | `SWING_WEIGHTS` | `volume:0.25` (higher) | Weights used in intraday mode |
-| `ATR_MULTIPLIER_STOP` | `1.5` | Stop = entry − (1.5 × ATR) |
-| `ATR_MULTIPLIER_TARGET` | `2.5` | Target = entry + (2.5 × ATR) |
+| `ATR_MULTIPLIER_STOP` | `1.5` | Stop = entry − (1.5 × ATR) — fixed for all regimes |
+| `ATR_MULTIPLIER_TARGET` | `2.5` | Default target multiplier (overridden by regime: Trending=3.5, Neutral=2.5, Ranging=2.0) |
 | `DEFAULT_PERIOD` | `6mo` | Lookback for general mode |
 | `SWING_PERIOD` | `1mo` | Lookback for intraday mode (hourly candles) |
 
