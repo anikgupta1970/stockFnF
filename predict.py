@@ -91,7 +91,8 @@ def cmd_record(args):
 
     raw_data, errors = {}, []
     with ThreadPoolExecutor(max_workers=10) as ex:
-        futures = {ex.submit(fetch_ticker_data, t, period, interval, True): t
+        use_cache = not args.no_cache
+        futures = {ex.submit(fetch_ticker_data, t, period, interval, use_cache): t
                    for t in tickers}
         for fut in as_completed(futures):
             ticker = futures[fut]
@@ -499,6 +500,8 @@ Examples:
                    help="Min score to record as a prediction (default: 65)")
     p.add_argument("--index",     choices=["all", "nifty50"], default="nifty50",
                    help="Stock universe for record command (default: nifty50)")
+    p.add_argument("--no-cache",  action="store_true",
+                   help="Force fresh data download, ignore disk cache")
     p.add_argument("--file",      type=Path,  default=PREDICTIONS_FILE,
                    help=f"Predictions JSON file (default: {PREDICTIONS_FILE})")
     return p.parse_args()
