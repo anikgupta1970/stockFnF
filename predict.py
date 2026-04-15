@@ -319,16 +319,11 @@ def cmd_evaluate(args):
         else:
             df = _fetch_daily_since(rec["ticker"], rec["date"])
 
-        if df.empty or len(df) < 2:
-            return  # not enough data yet
-
-        # Skip the first bar (= entry bar itself)
-        df_fwd = df.iloc[1:]
-        if df_fwd.empty:
-            return
+        if df.empty:
+            return  # no data yet
 
         outcome, out_ts, out_price = _determine_outcome(
-            rec["entry"], rec["stop"], rec["target"], df_fwd
+            rec["entry"], rec["stop"], rec["target"], df
         )
         rec["outcome"]       = outcome
         rec["outcome_date"]  = out_ts
