@@ -217,15 +217,30 @@ def cmd_record(args):
 
 # ── Evaluate ──────────────────────────────────────────────────────────────────
 
-def _fetch_daily_since(ticker: str, since: str) -> pd.DataFrame:
-    """Daily OHLCV from `since` to today — for general predictions."""
+def _fetch_ohlcv(ticker: str, period: str = None, interval: str = "1d",
+                 start: str = None) -> pd.DataFrame:
+    """
+    Fetch OHLCV using yf.Ticker.history() — thread-safe, no MultiIndex issues.
+    `period` OR `start` must be supplied.
+    """
     try:
-        df = yf.download(ticker, start=since, progress=False, auto_adjust=True)
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.droplevel(1)
-        return df.dropna(subset=["High", "Low", "Close"])
+        t  = yf.Ticker(ticker)
+        if start:
+            df = t.history(start=start, interval=interval, auto_adjust=True)
+        else:
+            df = t.history(period=period, interval=interval, auto_adjust=True)
+        if df is None or df.empty:
+            return pd.DataFrame()
+        df.columns = [c.strip().title() for c in df.columns]
+        keep = [c for c in ["Open", "High", "Low", "Close", "Volume"] if c in df.columns]
+        return df[keep].dropna(subset=["High", "Low", "Close"])
     except Exception:
         return pd.DataFrame()
+
+
+def _fetch_daily_since(ticker: str, since: str) -> pd.DataFrame:
+    """Daily OHLCV from `since` to today — for general predictions."""
+    return _fetch_ohlcv(ticker, interval="1d", start=since)
 
 
 def _fetch_hourly_since(ticker: str, since: str) -> pd.DataFrame:
@@ -233,22 +248,10 @@ def _fetch_hourly_since(ticker: str, since: str) -> pd.DataFrame:
     1h OHLCV — Yahoo Finance caps this at ~60 days of history.
     We fetch from `since` date or 59 days ago, whichever is more recent.
     """
-    try:
-        since_dt  = datetime.strptime(since, "%Y-%m-%d").date()
-        cutoff_dt = date.today() - timedelta(days=59)
-        start_dt  = max(since_dt, cutoff_dt)
-        df = yf.download(
-            ticker,
-            start=start_dt.isoformat(),
-            interval="1h",
-            progress=False,
-            auto_adjust=True,
-        )
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.droplevel(1)
-        return df.dropna(subset=["High", "Low", "Close"])
-    except Exception:
-        return pd.DataFrame()
+    since_dt  = datetime.strptime(since, "%Y-%m-%d").date()
+    cutoff_dt = date.today() - timedelta(days=59)
+    start_dt  = max(since_dt, cutoff_dt)
+    return _fetch_ohlcv(ticker, interval="1h", start=start_dt.isoformat())
 
 
 def _determine_outcome(entry: float, stop: float, target: float,
