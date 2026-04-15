@@ -9,7 +9,7 @@ NIFTY_50_TICKERS = [
     "KOTAKBANK.NS", "LT.NS", "M&M.NS", "MARUTI.NS",
     "NESTLEIND.NS", "NTPC.NS", "ONGC.NS", "POWERGRID.NS",
     "RELIANCE.NS", "SBILIFE.NS", "SBIN.NS", "SHRIRAMFIN.NS",
-    "SUNPHARMA.NS", "TATACONSUM.NS", "TATAMOTORS.NS", "TATASTEEL.NS",
+    "SUNPHARMA.NS", "TATACONSUM.NS", "TATASTEEL.NS",
     "TCS.NS", "TECHM.NS", "TITAN.NS", "ULTRACEMCO.NS",
     "UPL.NS", "WIPRO.NS",
 ]
@@ -57,7 +57,6 @@ SECTOR_MAP = {
     "SHRIRAMFIN.NS": "Financial Services",
     "SUNPHARMA.NS":  "Pharma",
     "TATACONSUM.NS": "FMCG",
-    "TATAMOTORS.NS": "Auto",
     "TATASTEEL.NS":  "Metals",
     "TCS.NS":        "IT",
     "TECHM.NS":      "IT",
