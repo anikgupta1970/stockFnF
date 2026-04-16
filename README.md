@@ -18,7 +18,8 @@ A fully algorithmic, terminal-based tool for analysing NSE-listed Indian stocks.
 | **Built-in backtester** | Walk-forward, no lookahead bias; exits at ATR stop/target or max 10 days — Sharpe + drawdown |
 | **Prediction tracker** | Record today's picks, evaluate later whether stop or target was hit |
 | **Smart caching** | OHLCV cached for 4h, fundamentals for 24h — fast repeated runs |
-| **Full NSE universe** | Analyses ~2,100 NSE equities or NIFTY 50 only (your choice) |
+| **Commodity ETFs** | Gold & Silver ETFs traded on NSE — same scoring and trade levels as stocks |
+| **Full NSE universe** | Analyses ~2,100 NSE equities, NIFTY 50, or commodity ETFs (your choice) |
 | **Rich terminal UI** | Colour-coded tables, score bars, sector summaries |
 
 ---
@@ -98,6 +99,12 @@ python3 main.py general --index nifty50 --sector FMCG
 python3 main.py intraday --index nifty50 --top 10
 python3 main.py intraday --index all --top 20
 
+# Commodity ETFs — Gold & Silver analysis
+python3 main.py general --index commodities --no-market-filter
+python3 main.py intraday --index commodities
+python3 main.py general --index commodities --sector Gold --no-market-filter
+python3 main.py general --index commodities --sector Silver --no-market-filter
+
 # Force fresh data download (bypass 4h cache)
 python3 main.py general --index nifty50 --no-cache
 
@@ -108,7 +115,9 @@ python3 main.py general --index nifty50 --no-market-filter
 python3 main.py general --index nifty50 --strict
 ```
 
-**Valid sector names:** `Banking`, `IT`, `Pharma`, `Auto`, `FMCG`, `Energy`, `Metals`, `Infrastructure`, `Consumer`, `Financial Services`, `Insurance`, `Telecom`, `Cement`, `Chemicals`, `Diversified`
+**Valid sector names (stocks):** `Banking`, `IT`, `Pharma`, `Auto`, `FMCG`, `Energy`, `Metals`, `Infrastructure`, `Consumer`, `Financial Services`, `Insurance`, `Telecom`, `Cement`, `Chemicals`, `Diversified`
+
+**Valid sector names (commodities):** `Gold`, `Silver`
 
 ### `predict.py` commands
 
@@ -221,7 +230,7 @@ python3 main.py <mode> [options]
 | `mode` | `general` / `intraday` | Daily multi-day view or 1h swing view |
 | `--top N` | integer | Show only the top N stocks |
 | `--sector NAME` | Banking, IT, Pharma, Auto, FMCG … | Filter results to one sector |
-| `--index` | `nifty50` / `all` | NIFTY 50 only (~50 stocks, fast) or full NSE (~2,100 stocks, slow first run) |
+| `--index` | `nifty50` / `all` / `commodities` | NIFTY 50, full NSE (~2,100 stocks), or Gold & Silver ETFs |
 | `--no-cache` | flag | Force fresh data download, ignore disk cache |
 | `--no-market-filter` | flag | Skip the NIFTY 50 uptrend check — useful in sideways or recovering markets |
 | `--strict` | flag | Only show stocks meeting ALL 4 confluence conditions (strongest signals) |
@@ -246,6 +255,10 @@ python3 main.py general --index nifty50 --strict
 
 # Run even when market is in downtrend
 python3 main.py general --index nifty50 --no-market-filter --top 20
+
+# Gold & Silver ETF analysis
+python3 main.py general --index commodities --no-market-filter
+python3 main.py general --index commodities --sector Gold --no-market-filter
 ```
 
 **Output columns — General mode**
@@ -314,6 +327,51 @@ General picks use **daily** candles. Intraday picks use **1h** candles for finer
 Results include overall win rate, per-mode win rate, and a sector breakdown of closed trades.
 
 **Predictions are stored as JSON** — open in any editor or import into Excel/Sheets.
+
+---
+
+## Commodity ETFs
+
+The tool supports Gold and Silver ETFs traded on NSE via `--index commodities`. These are analysed identically to stocks — same scoring, same ATR-based trade levels, same backtest.
+
+### Covered ETFs
+
+| ETF | Type | Ticker |
+|---|---|---|
+| Nippon India ETF Gold BeES | Gold | `GOLDBEES.NS` |
+| HDFC Gold ETF | Gold | `GOLDIETF.NS` |
+| Axis Gold ETF | Gold | `AXISGOLD.NS` |
+| Nippon India ETF Silver BeES | Silver | `SILVERBEES.NS` |
+| HDFC Silver ETF | Silver | `HDFCSILVER.NS` |
+| ICICI Prudential Silver ETF | Silver | `SILVERIETF.NS` |
+
+### Commands
+
+```bash
+# All Gold & Silver ETFs
+python3 main.py general --index commodities --no-market-filter
+
+# Gold only
+python3 main.py general --index commodities --sector Gold --no-market-filter
+
+# Silver only
+python3 main.py general --index commodities --sector Silver --no-market-filter
+
+# Intraday swing picks on commodities
+python3 main.py intraday --index commodities
+```
+
+### Notes on Commodity ETFs vs Stocks
+
+| Aspect | Stocks | Commodity ETFs |
+|---|---|---|
+| Volume | Higher, more liquid | Lower — expect Vol× of 0.1-0.5 |
+| Volatility | Higher | Lower — Gold/Silver trend slowly |
+| Stop hits | More frequent | Less frequent — wider ATR |
+| Signals | Frequent | Rare — score rarely crosses 65 |
+| Market filter | Apply | Use `--no-market-filter` (gold is counter-cyclical) |
+
+> Gold often moves **opposite** to equities — it rises when stock markets fall. The market uptrend filter (NIFTY check) is designed for stocks, so always use `--no-market-filter` when analysing commodities.
 
 ---
 
