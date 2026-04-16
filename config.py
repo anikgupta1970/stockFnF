@@ -1,3 +1,13 @@
+# ── Commodity ETFs (Gold & Silver, traded on NSE) ────────────────────────────
+COMMODITY_TICKERS = [
+    "GOLDBEES.NS",   # Nippon India ETF Gold BeES  (most liquid)
+    "GOLDIETF.NS",   # HDFC Gold ETF
+    "AXISGOLD.NS",   # Axis Gold ETF
+    "SILVERBEES.NS", # Nippon India ETF Silver BeES (most liquid)
+    "HDFCSILVER.NS", # HDFC Silver ETF
+    "SILVERIETF.NS", # ICICI Prudential Silver ETF
+]
+
 NIFTY_50_TICKERS = [
     "ADANIENT.NS", "ADANIPORTS.NS", "APOLLOHOSP.NS", "ASIANPAINT.NS",
     "AXISBANK.NS", "BAJAJ-AUTO.NS", "BAJAJFINSV.NS", "BAJFINANCE.NS",
@@ -15,6 +25,14 @@ NIFTY_50_TICKERS = [
 ]
 
 SECTOR_MAP = {
+    # Commodity ETFs
+    "GOLDBEES.NS":   "Gold",
+    "GOLDIETF.NS":   "Gold",
+    "AXISGOLD.NS":   "Gold",
+    "SILVERBEES.NS": "Silver",
+    "HDFCSILVER.NS": "Silver",
+    "SILVERIETF.NS": "Silver",
+
     "ADANIENT.NS":   "Energy",
     "ADANIPORTS.NS": "Infrastructure",
     "APOLLOHOSP.NS": "Healthcare",

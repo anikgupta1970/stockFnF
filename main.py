@@ -19,7 +19,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from rich.progress import (Progress, SpinnerColumn, TextColumn,
                            BarColumn, MofNCompleteColumn, TimeElapsedColumn)
 
-from config import (NIFTY_50_TICKERS, SECTOR_MAP,
+from config import (NIFTY_50_TICKERS, COMMODITY_TICKERS, SECTOR_MAP,
                     DEFAULT_PERIOD, DEFAULT_INTERVAL, SCORE_WEIGHTS,
                     SWING_PERIOD, SWING_INTERVAL, SWING_MIN_ROWS)
 from data_fetcher import fetch_ticker_data
@@ -51,8 +51,8 @@ Examples:
                    help="Show only top N stocks (default: all)")
     p.add_argument("--sector", type=str, default=None,
                    help="Filter by sector, e.g. Banking, IT, Pharma, FMCG, Auto")
-    p.add_argument("--index",  choices=["all", "nifty50"], default="all",
-                   help="Stock universe (default: all ~2100 NSE equities)")
+    p.add_argument("--index",  choices=["all", "nifty50", "commodities"], default="all",
+                   help="Stock universe: all ~2100 NSE equities, nifty50, or commodities (Gold/Silver ETFs)")
     p.add_argument("--no-cache", action="store_true",
                    help="Ignore cached data, re-download everything")
     p.add_argument("--no-market-filter", action="store_true",
@@ -110,6 +110,9 @@ def apply_confluence_filter(ranked: list) -> tuple:
 def get_tickers(index: str) -> list:
     if index == "nifty50":
         return NIFTY_50_TICKERS.copy()
+    if index == "commodities":
+        console.print(f"[dim]Commodity ETFs: {len(COMMODITY_TICKERS)} Gold & Silver ETFs[/dim]")
+        return COMMODITY_TICKERS.copy()
     try:
         from universe import get_all_tickers
         tickers = get_all_tickers()
