@@ -99,6 +99,12 @@ python3 main.py general --index nifty50 --sector FMCG
 python3 main.py intraday --index nifty50 --top 10
 python3 main.py intraday --index all --top 20
 
+# Fresher intraday signals — 15m candles (recommended for same-day trading)
+python3 main.py intraday --index nifty50 --top 10 --interval 15m
+
+# Very short-term — 5m candles (act within minutes)
+python3 main.py intraday --index nifty50 --top 10 --interval 5m
+
 # Commodity ETFs — Gold & Silver analysis
 python3 main.py general --index commodities --no-market-filter
 python3 main.py intraday --index commodities
@@ -165,6 +171,17 @@ python3 predict.py evaluate --file intraday_preds.json
 > **Important for intraday:** Yahoo Finance only keeps ~60 days of 1-hour candle history.
 > Run `evaluate` within 60 days of recording intraday picks or they will show as `OPEN` permanently.
 
+### Choosing the Right Interval for Intraday
+
+| Interval | Best for | Signal freshness | History used |
+|---|---|---|---|
+| `5m` | Scalping — act within minutes | Highest | Last 5 days |
+| `15m` | Same-day trades — act within 30 min | High | Last 10 days |
+| `30m` | Half-day trades | Medium | Last 20 days |
+| `1h` | 1-5 day swing trades (default) | Lower | Last 1 month |
+
+**Recommended:** Use `--interval 15m` for intraday trading. Signals update every 15 minutes instead of every hour — by the time you act, the signal is still valid.
+
 ### Typical daily workflow
 
 ```bash
@@ -172,7 +189,7 @@ source venv/bin/activate
 
 # Morning — check market direction first, then see top picks
 python3 main.py general  --index nifty50 --top 20          # includes automatic market uptrend check
-python3 main.py intraday --index nifty50 --top 10
+python3 main.py intraday --index nifty50 --top 10 --interval 15m   # fresher intraday signals
 
 # High-conviction picks only (all signals must agree)
 python3 main.py general  --index nifty50 --strict
@@ -234,6 +251,7 @@ python3 main.py <mode> [options]
 | `--no-cache` | flag | Force fresh data download, ignore disk cache |
 | `--no-market-filter` | flag | Skip the NIFTY 50 uptrend check — useful in sideways or recovering markets |
 | `--strict` | flag | Only show stocks meeting ALL 4 confluence conditions (strongest signals) |
+| `--interval` | `5m` / `15m` / `30m` / `1h` | Candle size for intraday mode (default: `1h`). Smaller = fresher signals, tighter stops |
 
 **Examples**
 

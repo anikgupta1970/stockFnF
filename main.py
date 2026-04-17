@@ -59,6 +59,9 @@ Examples:
                    help="Skip NIFTY 50 uptrend check and analyse regardless of market direction")
     p.add_argument("--strict", action="store_true",
                    help="Confluence filter: only show stocks where MACD bullish + Golden cross + RSI<65 + Score>=70")
+    p.add_argument("--interval", choices=["5m", "15m", "30m", "1h"],
+                   default=None,
+                   help="Candle interval for intraday mode (default: 1h). 5m/15m = fresher signals, more noise")
     return p.parse_args()
 
 
@@ -128,9 +131,18 @@ def main():
     is_swing  = args.mode == "intraday"
     use_cache = not args.no_cache
 
-    period   = SWING_PERIOD   if is_swing else DEFAULT_PERIOD
-    interval = SWING_INTERVAL if is_swing else DEFAULT_INTERVAL
-    min_rows = SWING_MIN_ROWS if is_swing else 60
+    # ── Interval / period selection ───────────────────────────────────────────
+    if is_swing and args.interval:
+        interval = args.interval
+        # Smaller intervals need shorter periods (Yahoo Finance limit: 60 days for <1h)
+        period_map  = {"5m": "5d", "15m": "10d", "30m": "20d", "1h": "1mo"}
+        min_row_map = {"5m": 50,   "15m": 40,    "30m": 30,    "1h": 50}
+        period   = period_map[interval]
+        min_rows = min_row_map[interval]
+    else:
+        period   = SWING_PERIOD   if is_swing else DEFAULT_PERIOD
+        interval = SWING_INTERVAL if is_swing else DEFAULT_INTERVAL
+        min_rows = SWING_MIN_ROWS if is_swing else 60
 
     tickers = get_tickers(args.index)
 
