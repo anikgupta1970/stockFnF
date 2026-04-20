@@ -220,9 +220,9 @@ def main():
     console.print(f"[dim]Fetched {len(raw_data):,} · skipped {len(errors):,}[/dim]")
 
     # ── Today's live candles (general mode, market hours only) ───────────────
+    console.print("[dim]Fetching today's live candles...[/dim]")
+    todays_candles = fetch_todays_candles(list(raw_data.keys()))
     if not is_swing:
-        console.print("[dim]Fetching today's live candles...[/dim]")
-        todays_candles = fetch_todays_candles(list(raw_data.keys()))
         for ticker, candle in todays_candles.items():
             if ticker in raw_data:
                 raw_data[ticker] = append_todays_candle(raw_data[ticker], candle)
@@ -268,11 +268,28 @@ def main():
 
     ranked = rank_stocks(scored)
 
+    # ── Today's open from actual analysis data ────────────────────────────────
+    # Use first candle of today from enriched df — this matches what indicators
+    # were computed on, so it's consistent with the rest of the analysis.
+    import datetime
+    today = datetime.date.today()
+    today_lows = {}
+    for ticker, df in enriched.items():
+        try:
+            mask = df.index.normalize().date == today
+            today_rows = df[mask]
+            if not today_rows.empty:
+                today_lows[ticker] = float(today_rows["Low"].min())
+        except Exception:
+            pass
+
     # ── Live LTP update ───────────────────────────────────────────────────────
     # Replace entry/close with real-time NSE price so users see current values.
     top_tickers = [r["ticker"] for r in ranked]
     live_ltps   = fetch_live_ltps(top_tickers)
     for r in ranked:
+        r["day_low"] = today_lows.get(r["ticker"],
+                       todays_candles.get(r["ticker"], {}).get("Low"))
         ltp = live_ltps.get(r["ticker"])
         if ltp:
             # Recalculate stop/target from live price so target is never below entry

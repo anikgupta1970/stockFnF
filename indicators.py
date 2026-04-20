@@ -84,6 +84,57 @@ def add_swing_levels(df: pd.DataFrame, window: int = 5) -> pd.DataFrame:
     return df
 
 
+def volume_profile(df: pd.DataFrame, bins: int = 100) -> tuple:
+    """
+    Build a volume profile from OHLCV data.
+    Distributes each candle's volume uniformly across its High-Low range.
+    Returns (bin_centers, vol_at_price) as numpy arrays.
+    """
+    price_min = df["Low"].min()
+    price_max = df["High"].max()
+    if price_min == price_max:
+        return np.array([price_min]), np.array([df["Volume"].sum()])
+
+    bin_edges   = np.linspace(price_min, price_max, bins + 1)
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    vol_profile = np.zeros(bins)
+
+    lows  = df["Low"].values
+    highs = df["High"].values
+    vols  = df["Volume"].values
+
+    for i in range(len(df)):
+        lo_idx = max(0, np.searchsorted(bin_edges, lows[i],  side="left")  - 1)
+        hi_idx = min(bins, np.searchsorted(bin_edges, highs[i], side="right"))
+        n = hi_idx - lo_idx
+        if n > 0:
+            vol_profile[lo_idx:hi_idx] += vols[i] / n
+
+    return bin_centers, vol_profile
+
+
+def nearest_hvn_above(df: pd.DataFrame, close: float, min_target: float = None,
+                      lookback: int = 60, bins: int = 100,
+                      max_pct: float = 12.0) -> float:
+    """
+    Find the nearest High Volume Node (HVN) above `min_target` (defaults to close).
+    HVNs are price levels where traded volume was significantly above average —
+    institutions accumulate/distribute at these levels, making them strong targets.
+    Pass min_target = close + risk to get only HVNs that satisfy R:R >= 1.0.
+    Returns the nearest qualifying HVN price, or None if not found.
+    """
+    prices, vols = volume_profile(df.tail(lookback), bins)
+
+    threshold  = vols.mean() + 0.5 * vols.std()
+    floor      = min_target if min_target is not None else close
+    max_price  = close * (1 + max_pct / 100)
+
+    mask       = (vols >= threshold) & (prices > floor) & (prices <= max_price)
+    candidates = prices[mask]
+
+    return float(candidates.min()) if len(candidates) > 0 else None
+
+
 def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """Standard daily indicators for positional analysis."""
     df = add_rsi(df)

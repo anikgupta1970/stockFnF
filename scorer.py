@@ -268,11 +268,18 @@ def score_stock(df: pd.DataFrame, weights: dict = None,
     if fund_lbl and fund_score is not None and abs(fund_score - 50) > 10:
         reasoning = [reasoning[0], fund_lbl] if reasoning else [fund_lbl]
 
-    close      = last.get("Close", float("nan"))
-    atr        = last.get("atr",   float("nan"))
-    resistance = _nearest_resistance(df, float(close))
-    levels     = _trade_levels(float(close), float(atr),
-                               regime=current_regime, resistance=resistance)
+    close = last.get("Close", float("nan"))
+    atr   = last.get("atr",   float("nan"))
+
+    # Target priority: HVN (volume profile) → swing high → ATR fallback
+    # min_target ensures HVN gives at least R:R = 1.0
+    from indicators import nearest_hvn_above
+    _stop       = float(close) - ATR_MULTIPLIER_STOP * float(atr)
+    _min_target = float(close) + (float(close) - _stop)
+    resistance  = (nearest_hvn_above(df, float(close), min_target=_min_target) or
+                   _nearest_resistance(df, float(close)))
+    levels = _trade_levels(float(close), float(atr),
+                           regime=current_regime, resistance=resistance)
 
     return {
         "score":       round(composite, 1),

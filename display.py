@@ -61,6 +61,7 @@ def render_table(results: list, top_n: int, sector_map: dict,
     table.add_column("Ticker",   style="bold",     width=12, no_wrap=True)
     table.add_column("Sector",                     width=14, no_wrap=True)
     table.add_column("Score",                      width=14, no_wrap=True)
+    table.add_column("Day Low ₹", justify="right",  width=10, no_wrap=True)
     table.add_column("Entry ₹",  justify="right",  width=9,  no_wrap=True)
     table.add_column("Stop ₹",   justify="right",  width=9,  no_wrap=True)
     table.add_column("Target ₹", justify="right",  width=10, no_wrap=True)
@@ -98,6 +99,7 @@ def render_table(results: list, top_n: int, sector_map: dict,
             ticker.replace(".NS", ""),
             sector_map.get(ticker, "—"),
             score_text,
+            f"[yellow]{_fmt_price(row.get('day_low'))}[/yellow]",
             _fmt_price(row.get("entry")),
             f"[red]{_fmt_price(row.get('stop'))}[/red]",
             f"[green]{_fmt_price(row.get('target'))}[/green]",
@@ -162,6 +164,7 @@ def render_swing_table(results: list, top_n: int, sector_map: dict) -> None:
     table.add_column("Ticker",    style="bold",     width=12, no_wrap=True)
     table.add_column("Sector",                      width=14, no_wrap=True)
     table.add_column("Score",                       width=14, no_wrap=True)
+    table.add_column("Day Low ₹",  justify="right",  width=10, no_wrap=True)
     table.add_column("Entry ₹",   justify="right",  width=9,  no_wrap=True)
     table.add_column("Stop ₹",    justify="right",  width=9,  no_wrap=True)
     table.add_column("Target ₹",  justify="right",  width=10, no_wrap=True)
@@ -201,6 +204,7 @@ def render_swing_table(results: list, top_n: int, sector_map: dict) -> None:
             row["ticker"].replace(".NS", ""),
             sector_map.get(row["ticker"], "—"),
             score_text,
+            f"[yellow]{_fmt_price(row.get('day_low'))}[/yellow]",
             _fmt_price(row.get("entry")),
             f"[red]{_fmt_price(row.get('stop'))}[/red]",
             f"[green]{_fmt_price(row.get('target'))}[/green]",
