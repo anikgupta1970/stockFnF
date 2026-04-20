@@ -269,6 +269,7 @@ def score_stock(df: pd.DataFrame, weights: dict = None,
         "sub_scores":  sub_scores,
         "reasoning":   reasoning,
         "close":       round(float(close), 2),
+        "atr":         round(float(atr), 4),
         **levels,
     }
 
@@ -319,6 +320,7 @@ def score_stock_swing(df: pd.DataFrame) -> dict:
         "above_vwap":   above_vwap,
         "sub_scores":   sub_scores,
         "reasoning":    reasoning,
+        "atr":          round(atr, 4),
         **levels,
     }
 

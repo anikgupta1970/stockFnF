@@ -29,9 +29,10 @@ def _nse_session() -> requests.Session:
     s.get("https://www.nseindia.com", headers=_NSE_HEADERS, timeout=10)
     return s
 
-CACHE_DIR            = os.path.expanduser("~/.stocks_cache/data")
-DATA_CACHE_TTL_HOURS = 4    # intraday data refreshes every 4 hours
-MAX_RETRIES          = 3
+CACHE_DIR                   = os.path.expanduser("~/.stocks_cache/data")
+DAILY_CACHE_TTL_HOURS       = 24   # daily candles — refresh once per day
+INTRADAY_CACHE_TTL_HOURS    = 4    # intraday candles — refresh every 4 hours
+MAX_RETRIES                 = 3
 
 # Period string → approximate calendar days
 _PERIOD_DAYS = {
@@ -54,7 +55,8 @@ def _load_cache(ticker: str, period: str, interval: str):
     if not os.path.exists(path):
         return None
     age_hours = (time.time() - os.path.getmtime(path)) / 3600
-    if age_hours > DATA_CACHE_TTL_HOURS:
+    ttl = DAILY_CACHE_TTL_HOURS if interval == "1d" else INTRADAY_CACHE_TTL_HOURS
+    if age_hours > ttl:
         return None
     try:
         with open(path, "rb") as f:

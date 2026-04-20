@@ -23,6 +23,7 @@ from config import (NIFTY_50_TICKERS, COMMODITY_TICKERS, SECTOR_MAP,
                     DEFAULT_PERIOD, DEFAULT_INTERVAL, SCORE_WEIGHTS,
                     SWING_PERIOD, SWING_INTERVAL, SWING_MIN_ROWS)
 from data_fetcher import fetch_ticker_data, fetch_live_ltps
+from scorer import _trade_levels
 from indicators import (add_all_indicators, add_all_indicators_swing,
                         add_regime_columns)
 from scorer import score_stock, score_stock_swing, rank_stocks
@@ -266,8 +267,13 @@ def main():
     for r in ranked:
         ltp = live_ltps.get(r["ticker"])
         if ltp:
-            r["entry"] = round(ltp, 2)
-            r["close"] = round(ltp, 2)
+            # Recalculate stop/target from live price so target is never below entry
+            atr = r.get("atr") or (r["entry"] - r["stop"]) / 1.5
+            levels = _trade_levels(ltp, atr, regime=r.get("regime", "neutral"))
+            r.update(levels)
+
+    # Drop any remaining invalid setups (target <= entry)
+    ranked = [r for r in ranked if r.get("target", 0) > r.get("entry", 0)]
 
     # ── Confluence filter (--strict) ──────────────────────────────────────────
     weak = []
