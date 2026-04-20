@@ -44,6 +44,7 @@ Examples:
   python3 main.py intraday --top 10     # Top 10 intraday picks
   python3 main.py general --sector IT   # General, IT sector only
   python3 main.py general --index nifty50  # NIFTY 50 only (faster)
+  python3 main.py general --date 2025-04-10 --index nifty50  # Historical picks for a past date
         """,
     )
     p.add_argument("mode", choices=["general", "intraday"],
@@ -63,6 +64,8 @@ Examples:
     p.add_argument("--interval", choices=["5m", "15m", "30m", "1h"],
                    default=None,
                    help="Candle interval for intraday mode (default: 1h). 5m/15m = fresher signals, more noise")
+    p.add_argument("--date", type=str, default=None,
+                   help="Historical date to analyse (YYYY-MM-DD). Shows what picks would have been on that day.")
     return p.parse_args()
 
 
@@ -161,6 +164,19 @@ def main():
     is_swing  = args.mode == "intraday"
     use_cache = not args.no_cache
 
+    # ── Historical date mode ──────────────────────────────────────────────────
+    import datetime as _dt
+    target_date = None
+    if args.date:
+        try:
+            target_date = _dt.date.fromisoformat(args.date)
+        except ValueError:
+            console.print(f"[red]Invalid --date format '{args.date}'. Use YYYY-MM-DD (e.g. 2025-04-10).[/red]")
+            sys.exit(1)
+        if target_date > _dt.date.today():
+            console.print("[red]--date cannot be in the future.[/red]")
+            sys.exit(1)
+
     # ── Interval / period selection ───────────────────────────────────────────
     if is_swing and args.interval:
         interval = args.interval
@@ -174,10 +190,44 @@ def main():
         interval = SWING_INTERVAL if is_swing else DEFAULT_INTERVAL
         min_rows = SWING_MIN_ROWS if is_swing else 60
 
+    # ── Extend period to cover target date (historical mode) ─────────────────
+    if target_date:
+        days_back = (_dt.date.today() - target_date).days
+        # Candles per trading day per interval
+        _cpd = {"5m": 75, "15m": 25, "30m": 12, "1h": 6, "1d": 1}
+        warmup_days = max(10, (min_rows // _cpd.get(interval, 1)) + 5)
+        needed = days_back + warmup_days
+
+        # yfinance hard limit: 60 days for intervals < 1h, 730 for 1h
+        _max_days = 60 if interval in ("5m", "15m", "30m") else 730
+        if days_back > _max_days:
+            console.print(
+                f"\n[red]Cannot analyse {target_date} with --interval {interval}.[/red]\n"
+                f"[yellow]{interval} data is only available for the last {_max_days} days from yfinance "
+                f"({target_date} is {days_back} days ago).[/yellow]\n"
+            )
+            if interval in ("5m", "15m", "30m"):
+                console.print(
+                    "[dim]Try one of these instead:[/dim]\n"
+                    f"  [cyan]--interval 1h[/cyan]           (covers up to ~2 years)\n"
+                    f"  [cyan]python3 main.py general --date {target_date}[/cyan]  (daily candles, no date limit)\n"
+                )
+            else:
+                console.print(
+                    "[dim]Try daily candles instead:[/dim]\n"
+                    f"  [cyan]python3 main.py general --date {target_date}[/cyan]\n"
+                )
+            sys.exit(1)
+
+        # Pick the smallest period string that covers `needed` days
+        _periods = [("5d", 5), ("10d", 10), ("20d", 20), ("30d", 30), ("60d", 60),
+                    ("3mo", 95), ("6mo", 185), ("1y", 370), ("2y", 740)]
+        period = next((p for p, d in _periods if d >= needed), "2y")
+
     tickers = get_tickers(args.index)
 
     # ── Market regime filter ──────────────────────────────────────────────────
-    if not args.no_market_filter:
+    if not args.no_market_filter and not target_date:
         in_uptrend = check_market_regime(use_cache)
         if not in_uptrend:
             ans = input("\nMarket is in downtrend. Continue anyway? [y/N] ").strip().lower()
@@ -187,10 +237,16 @@ def main():
             console.print()
 
     mode_label = "[yellow]INTRADAY[/yellow]" if is_swing else "[blue]GENERAL[/blue]"
+    date_label = f" · [bold yellow]Historical: {target_date}[/bold yellow]" if target_date else ""
     console.print(
         f"\n[bold cyan]NSE Stock Analyser[/bold cyan] · {mode_label}"
-        f" · {len(tickers):,} stocks · {period} · {interval}\n"
+        f" · {len(tickers):,} stocks · {period} · {interval}{date_label}\n"
     )
+    if target_date:
+        console.print(
+            f"[dim]Showing what the tool would have picked on [bold]{target_date}[/bold]. "
+            f"Compare Entry/Stop/Target against actual prices to verify predictions.[/dim]\n"
+        )
     if len(tickers) > 200:
         console.print("[dim]Large universe — first run caches data, subsequent runs are fast.[/dim]\n")
 
@@ -219,9 +275,31 @@ def main():
 
     console.print(f"[dim]Fetched {len(raw_data):,} · skipped {len(errors):,}[/dim]")
 
+    # ── Truncate data to target date (historical mode) ────────────────────────
+    if target_date:
+        import pandas as pd
+        pruned = {}
+        for ticker, df in raw_data.items():
+            df_cut = df[df.index.normalize().date <= target_date]
+            if len(df_cut) >= min_rows:
+                pruned[ticker] = df_cut
+            else:
+                errors.append(ticker)
+        raw_data = pruned
+        if not raw_data:
+            console.print(
+                f"[red]No tickers have enough data before {target_date}. "
+                f"Try a more recent date or re-run with --no-cache.[/red]"
+            )
+            sys.exit(1)
+        console.print(
+            f"[dim]Truncated to {target_date}: {len(raw_data):,} tickers · "
+            f"{len(errors):,} skipped (insufficient history)[/dim]"
+        )
+
     # ── Today's live candles (general mode, market hours only) ───────────────
     todays_candles = {}
-    if not is_swing:
+    if not is_swing and not target_date:
         console.print("[dim]Fetching today's live candles...[/dim]")
         todays_candles = fetch_todays_candles(list(raw_data.keys()))
         for ticker, candle in todays_candles.items():
@@ -269,25 +347,26 @@ def main():
 
     ranked = rank_stocks(scored)
 
-    # ── Today's open from actual analysis data ────────────────────────────────
-    # Use first candle of today from enriched df — this matches what indicators
-    # were computed on, so it's consistent with the rest of the analysis.
+    # ── Day-low from analysis data ────────────────────────────────────────────
+    # Use the candle for the analysis date (today or target_date).
     import datetime
-    today = datetime.date.today()
+    ref_date = target_date if target_date else datetime.date.today()
     today_lows = {}
     for ticker, df in enriched.items():
         try:
-            mask = df.index.normalize().date == today
-            today_rows = df[mask]
-            if not today_rows.empty:
-                today_lows[ticker] = float(today_rows["Low"].min())
+            mask = df.index.normalize().date == ref_date
+            ref_rows = df[mask]
+            if not ref_rows.empty:
+                today_lows[ticker] = float(ref_rows["Low"].min())
         except Exception:
             pass
 
-    # ── Live LTP update ───────────────────────────────────────────────────────
-    # Replace entry/close with real-time NSE price so users see current values.
-    top_tickers = [r["ticker"] for r in ranked]
-    live_ltps   = fetch_live_ltps(top_tickers)
+    # ── Live LTP update (skipped in historical mode) ──────────────────────────
+    live_ltps = {}
+    if not target_date:
+        # Replace entry/close with real-time NSE price so users see current values.
+        top_tickers = [r["ticker"] for r in ranked]
+        live_ltps   = fetch_live_ltps(top_tickers)
     for r in ranked:
         r["day_low"] = today_lows.get(r["ticker"],
                        todays_candles.get(r["ticker"], {}).get("Low"))
@@ -338,10 +417,10 @@ def main():
 
     # ── Display scores ────────────────────────────────────────────────────────
     if is_swing:
-        render_swing_table(ranked, top_n, SECTOR_MAP)
+        render_swing_table(ranked, top_n, SECTOR_MAP, date=target_date)
         render_swing_summary(ranked, SECTOR_MAP, errors)
     else:
-        render_table(ranked, top_n, SECTOR_MAP, show_regime=True)
+        render_table(ranked, top_n, SECTOR_MAP, show_regime=True, date=target_date)
         render_summary(ranked, SECTOR_MAP, errors)
 
     if weak and args.strict:

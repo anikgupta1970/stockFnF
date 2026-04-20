@@ -190,7 +190,11 @@ def add_stochastic(df: pd.DataFrame, window: int = 14,
 def add_vwap(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     typical = (df["High"] + df["Low"] + df["Close"]) / 3
-    df["vwap"] = (typical * df["Volume"]).cumsum() / df["Volume"].cumsum()
+    date_key = df.index.normalize()
+    df["vwap"] = (
+        (typical * df["Volume"]).groupby(date_key).cumsum()
+        / df["Volume"].groupby(date_key).cumsum()
+    )
     return df
 
 

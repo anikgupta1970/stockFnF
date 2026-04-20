@@ -48,11 +48,12 @@ def _rsi_cell(rsi_val: float) -> str:
 # ── General (positional) table ─────────────────────────────────────────────────
 
 def render_table(results: list, top_n: int, sector_map: dict,
-                 show_regime: bool = False) -> None:
+                 show_regime: bool = False, date=None) -> None:
     shown = results[:top_n]
 
+    title_suffix = f" — [bold yellow]{date}[/bold yellow]" if date else ""
     table = Table(
-        title=f"[bold cyan]NSE Stock Analysis — {top_n} Stocks by Buy Probability[/bold cyan]",
+        title=f"[bold cyan]NSE Stock Analysis — {top_n} Stocks by Buy Probability{title_suffix}[/bold cyan]",
         box=box.SIMPLE_HEAVY, show_lines=False,
         header_style="bold white on dark_blue", expand=False,
     )
@@ -149,11 +150,12 @@ def render_summary(results: list, sector_map: dict, errors: list) -> None:
 
 # ── Swing (intraday) table ────────────────────────────────────────────────────
 
-def render_swing_table(results: list, top_n: int, sector_map: dict) -> None:
+def render_swing_table(results: list, top_n: int, sector_map: dict, date=None) -> None:
     shown = results[:top_n]
 
+    title_suffix = f" — [bold yellow]{date}[/bold yellow]" if date else ""
     table = Table(
-        title=f"[bold cyan]NSE Swing Analysis — Top {top_n} Picks (1h candles)[/bold cyan]",
+        title=f"[bold cyan]NSE Swing Analysis — Top {top_n} Picks (1h candles){title_suffix}[/bold cyan]",
         box=box.SIMPLE_HEAVY, show_lines=False,
         header_style="bold white on dark_blue", expand=False,
     )
