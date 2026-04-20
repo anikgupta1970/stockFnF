@@ -22,7 +22,7 @@ from rich.progress import (Progress, SpinnerColumn, TextColumn,
 from config import (NIFTY_50_TICKERS, COMMODITY_TICKERS, SECTOR_MAP,
                     DEFAULT_PERIOD, DEFAULT_INTERVAL, SCORE_WEIGHTS,
                     SWING_PERIOD, SWING_INTERVAL, SWING_MIN_ROWS)
-from data_fetcher import fetch_ticker_data
+from data_fetcher import fetch_ticker_data, fetch_live_ltps
 from indicators import (add_all_indicators, add_all_indicators_swing,
                         add_regime_columns)
 from scorer import score_stock, score_stock_swing, rank_stocks
@@ -65,6 +65,35 @@ Examples:
     return p.parse_args()
 
 
+def _get_nifty_live_price(fallback: float) -> float:
+    """
+    Fetch the most current NIFTY price:
+      1. NSE direct API — real-time during market hours
+      2. yfinance fast_info.last_price — fallback (last traded price)
+      3. last daily close — final fallback
+    """
+    try:
+        from data_fetcher import _nse_session, _NSE_HEADERS
+        session = _nse_session()
+        resp = session.get(
+            "https://www.nseindia.com/api/allIndices",
+            headers=_NSE_HEADERS, timeout=8,
+        )
+        for item in resp.json().get("data", []):
+            if item.get("index") == "NIFTY 50":
+                return float(item["last"])
+    except Exception:
+        pass
+    try:
+        import yfinance as yf
+        price = yf.Ticker("^NSEI").fast_info.last_price
+        if price and price > 0:
+            return float(price)
+    except Exception:
+        pass
+    return fallback
+
+
 def check_market_regime(use_cache: bool = True) -> bool:
     """
     Returns True if NIFTY 50 (^NSEI) is above its 50-day MA (uptrend).
@@ -75,7 +104,7 @@ def check_market_regime(use_cache: bool = True) -> bool:
         console.print("[yellow]Could not fetch NIFTY index data — skipping market filter.[/yellow]")
         return True
     ma50       = df["Close"].rolling(50).mean().iloc[-1]
-    last_close = df["Close"].iloc[-1]
+    last_close = _get_nifty_live_price(df["Close"].iloc[-1])
     if last_close < ma50:
         console.print(
             f"\n[bold red]⚠  Market in downtrend[/bold red] — "
@@ -229,6 +258,16 @@ def main():
         sys.exit(1)
 
     ranked = rank_stocks(scored)
+
+    # ── Live LTP update ───────────────────────────────────────────────────────
+    # Replace entry/close with real-time NSE price so users see current values.
+    top_tickers = [r["ticker"] for r in ranked]
+    live_ltps   = fetch_live_ltps(top_tickers)
+    for r in ranked:
+        ltp = live_ltps.get(r["ticker"])
+        if ltp:
+            r["entry"] = round(ltp, 2)
+            r["close"] = round(ltp, 2)
 
     # ── Confluence filter (--strict) ──────────────────────────────────────────
     weak = []

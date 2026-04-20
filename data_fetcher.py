@@ -10,10 +10,24 @@ import time
 import pickle
 import random
 import datetime
+import requests
 import yfinance as yf
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from config import MIN_ROWS
+
+_NSE_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+    "Accept": "*/*",
+    "Referer": "https://www.nseindia.com/",
+}
+
+
+def _nse_session() -> requests.Session:
+    """Return a requests Session pre-seeded with NSE cookies."""
+    s = requests.Session()
+    s.get("https://www.nseindia.com", headers=_NSE_HEADERS, timeout=10)
+    return s
 
 CACHE_DIR            = os.path.expanduser("~/.stocks_cache/data")
 DATA_CACHE_TTL_HOURS = 4    # intraday data refreshes every 4 hours
@@ -173,3 +187,31 @@ def fetch_all(tickers: list, period: str, interval: str,
                 progress_callback(ticker, not df.empty)
 
     return results, errors
+
+
+def fetch_live_ltps(tickers: list, max_workers: int = 10) -> dict:
+    """
+    Fetch live LTP for each ticker from NSE equity quote API.
+    Returns {ticker: ltp_float} for tickers where fetch succeeded.
+    Tickers should be in .NS format (e.g. 'RELIANCE.NS'); .NS/.BO suffix is stripped.
+    """
+    session = _nse_session()
+
+    def _ltp(ticker):
+        symbol = ticker.replace(".NS", "").replace(".BO", "")
+        try:
+            resp = session.get(
+                f"https://www.nseindia.com/api/quote-equity?symbol={symbol}",
+                headers=_NSE_HEADERS, timeout=8,
+            )
+            price = resp.json()["priceInfo"]["lastPrice"]
+            return ticker, float(price)
+        except Exception:
+            return ticker, None
+
+    ltps = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        for ticker, price in executor.map(_ltp, tickers):
+            if price is not None:
+                ltps[ticker] = price
+    return ltps
