@@ -220,9 +220,10 @@ def main():
     console.print(f"[dim]Fetched {len(raw_data):,} · skipped {len(errors):,}[/dim]")
 
     # ── Today's live candles (general mode, market hours only) ───────────────
-    console.print("[dim]Fetching today's live candles...[/dim]")
-    todays_candles = fetch_todays_candles(list(raw_data.keys()))
+    todays_candles = {}
     if not is_swing:
+        console.print("[dim]Fetching today's live candles...[/dim]")
+        todays_candles = fetch_todays_candles(list(raw_data.keys()))
         for ticker, candle in todays_candles.items():
             if ticker in raw_data:
                 raw_data[ticker] = append_todays_candle(raw_data[ticker], candle)
@@ -297,6 +298,9 @@ def main():
             levels = _trade_levels(ltp, atr, regime=r.get("regime", "neutral"),
                                    resistance=r.get("resistance"))
             r.update(levels)
+            # yfinance has 15min delay — live price may be below candle-based day_low
+            if r.get("day_low") and ltp < r["day_low"]:
+                r["day_low"] = round(ltp, 2)
 
     # Drop any remaining invalid setups (target <= entry)
     ranked = [r for r in ranked if r.get("target", 0) > r.get("entry", 0)]
