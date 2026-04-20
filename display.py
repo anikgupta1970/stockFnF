@@ -5,7 +5,7 @@ from rich.text import Text
 from rich import box
 from collections import Counter
 
-console = Console(width=180)
+console = Console()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -65,7 +65,6 @@ def render_table(results: list, top_n: int, sector_map: dict,
     table.add_column("Entry ₹",  justify="right",  width=9,  no_wrap=True)
     table.add_column("Stop ₹",   justify="right",  width=9,  no_wrap=True)
     table.add_column("Target ₹", justify="right",  width=10, no_wrap=True)
-    table.add_column("Risk %",   justify="center", width=7,  no_wrap=True)
     table.add_column("R:R",      justify="center", width=5,  no_wrap=True)
     if show_regime:
         table.add_column("Regime", justify="center", width=10, no_wrap=True)
@@ -103,7 +102,6 @@ def render_table(results: list, top_n: int, sector_map: dict,
             _fmt_price(row.get("entry")),
             f"[red]{_fmt_price(row.get('stop'))}[/red]",
             f"[green]{_fmt_price(row.get('target'))}[/green]",
-            _fmt_pct(row.get("risk_pct")),
             rr_str,
             *extra,
             _rsi_cell(row["rsi"]),
@@ -168,7 +166,6 @@ def render_swing_table(results: list, top_n: int, sector_map: dict) -> None:
     table.add_column("Entry ₹",   justify="right",  width=9,  no_wrap=True)
     table.add_column("Stop ₹",    justify="right",  width=9,  no_wrap=True)
     table.add_column("Target ₹",  justify="right",  width=10, no_wrap=True)
-    table.add_column("Risk %",    justify="center", width=7,  no_wrap=True)
     table.add_column("R:R",       justify="center", width=5,  no_wrap=True)
     table.add_column("RSI",       justify="center", width=5,  no_wrap=True)
     table.add_column("Stoch",     justify="center", width=6,  no_wrap=True)
@@ -208,7 +205,6 @@ def render_swing_table(results: list, top_n: int, sector_map: dict) -> None:
             _fmt_price(row.get("entry")),
             f"[red]{_fmt_price(row.get('stop'))}[/red]",
             f"[green]{_fmt_price(row.get('target'))}[/green]",
-            _fmt_pct(row.get("risk_pct")),
             f"{rr:.1f}" if rr == rr else "—",
             _rsi_cell(row["rsi"]),
             stoch_cell,

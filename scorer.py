@@ -112,11 +112,11 @@ def _stoch_score(stoch_k: float, stoch_d: float) -> tuple:
                             [90, 80, 55, 45, 20, 10]))
     bull = stoch_k > stoch_d
     if stoch_k < 20:
-        label = f"Stoch={stoch_k:.0f} (oversold{' + bullish cross' if bull else ''})"
+        label = f"Stoch {stoch_k:.0f} OS{' ↑' if bull else ''}"
     elif stoch_k > 80:
-        label = f"Stoch={stoch_k:.0f} (overbought{' + bearish cross' if not bull else ''})"
+        label = f"Stoch {stoch_k:.0f} OB{' ↓' if not bull else ''}"
     else:
-        label = f"Stoch={stoch_k:.0f} ({'bullish' if bull else 'bearish'} cross)"
+        label = f"Stoch {stoch_k:.0f} {'↑' if bull else '↓'}"
     return score, label
 
 
