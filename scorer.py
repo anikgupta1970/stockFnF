@@ -158,29 +158,46 @@ def score_row(row: pd.Series, weights: dict) -> float:
 
 # ── ATR-based trade levels (shared by both modes) ─────────────────────────────
 
-# Target ATR multiplier varies by regime — stop stays fixed at ATR_MULTIPLIER_STOP
+# ATR fallback multipliers when no resistance level is found
 _TARGET_BY_REGIME = {
-    "trending": 3.5,   # R:R = 3.5/1.5 = 2.33  — trend has more room to run
-    "neutral":  2.5,   # R:R = 2.5/1.5 = 1.67  — default
-    "ranging":  2.0,   # R:R = 2.0/1.5 = 1.33  — tighter, mean-reversion
+    "trending": 3.5,
+    "neutral":  2.5,
+    "ranging":  2.0,
 }
+
+
+def _nearest_resistance(df: pd.DataFrame, close: float,
+                        max_pct_away: float = 10.0):
+    """
+    Return the nearest confirmed swing high above `close` within max_pct_away %.
+    Falls back to None if no resistance found.
+    """
+    if "swing_high" not in df.columns:
+        return None
+    ceiling = close * (1 + max_pct_away / 100)
+    highs = df.loc[df["swing_high"], "High"]
+    candidates = highs[(highs > close) & (highs <= ceiling)]
+    return float(candidates.min()) if not candidates.empty else None
 
 
 def _trade_levels(close: float, atr: float,
                   stop_mult: float = ATR_MULTIPLIER_STOP,
                   target_mult: float = ATR_MULTIPLIER_TARGET,
-                  regime: str = "neutral") -> dict:
+                  regime: str = "neutral",
+                  resistance: float = None) -> dict:
     if np.isnan(atr) or atr <= 0 or np.isnan(close) or close <= 0:
         nan = float("nan")
         return {"entry": close, "stop": nan, "target": nan,
                 "risk_pct": nan, "reward_pct": nan, "rr_ratio": nan}
 
-    # Stop: always 1.5 × ATR — risk% varies naturally per stock's volatility
     stop = close - stop_mult * atr
 
-    # Target: multiplier depends on regime
-    effective_target_mult = _TARGET_BY_REGIME.get(regime, target_mult)
-    target = close + effective_target_mult * atr
+    # Use real resistance only if it gives R:R >= 1.0, else fall back to ATR multiple
+    if resistance and resistance > close and (resistance - close) >= (close - stop):
+        target = resistance
+    else:
+        effective_target_mult = _TARGET_BY_REGIME.get(regime, target_mult)
+        target = close + effective_target_mult * atr
 
     risk   = (close - stop)   / close * 100
     reward = (target - close) / close * 100
@@ -251,9 +268,11 @@ def score_stock(df: pd.DataFrame, weights: dict = None,
     if fund_lbl and fund_score is not None and abs(fund_score - 50) > 10:
         reasoning = [reasoning[0], fund_lbl] if reasoning else [fund_lbl]
 
-    close = last.get("Close", float("nan"))
-    atr   = last.get("atr",   float("nan"))
-    levels = _trade_levels(float(close), float(atr), regime=current_regime)
+    close      = last.get("Close", float("nan"))
+    atr        = last.get("atr",   float("nan"))
+    resistance = _nearest_resistance(df, float(close))
+    levels     = _trade_levels(float(close), float(atr),
+                               regime=current_regime, resistance=resistance)
 
     return {
         "score":       round(composite, 1),
@@ -270,6 +289,7 @@ def score_stock(df: pd.DataFrame, weights: dict = None,
         "reasoning":   reasoning,
         "close":       round(float(close), 2),
         "atr":         round(float(atr), 4),
+        "resistance":  round(resistance, 2) if resistance else None,
         **levels,
     }
 

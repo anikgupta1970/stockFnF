@@ -22,7 +22,7 @@ from rich.progress import (Progress, SpinnerColumn, TextColumn,
 from config import (NIFTY_50_TICKERS, COMMODITY_TICKERS, SECTOR_MAP,
                     DEFAULT_PERIOD, DEFAULT_INTERVAL, SCORE_WEIGHTS,
                     SWING_PERIOD, SWING_INTERVAL, SWING_MIN_ROWS)
-from data_fetcher import fetch_ticker_data, fetch_live_ltps
+from data_fetcher import fetch_ticker_data, fetch_live_ltps, fetch_todays_candles, append_todays_candle
 from scorer import _trade_levels
 from indicators import (add_all_indicators, add_all_indicators_swing,
                         add_regime_columns)
@@ -219,6 +219,14 @@ def main():
 
     console.print(f"[dim]Fetched {len(raw_data):,} · skipped {len(errors):,}[/dim]")
 
+    # ── Today's live candles (general mode, market hours only) ───────────────
+    if not is_swing:
+        console.print("[dim]Fetching today's live candles...[/dim]")
+        todays_candles = fetch_todays_candles(list(raw_data.keys()))
+        for ticker, candle in todays_candles.items():
+            if ticker in raw_data:
+                raw_data[ticker] = append_todays_candle(raw_data[ticker], candle)
+
     # ── Indicators ────────────────────────────────────────────────────────────
     console.print("[dim]Computing indicators...[/dim]")
     enriched = {}
@@ -269,7 +277,8 @@ def main():
         if ltp:
             # Recalculate stop/target from live price so target is never below entry
             atr = r.get("atr") or (r["entry"] - r["stop"]) / 1.5
-            levels = _trade_levels(ltp, atr, regime=r.get("regime", "neutral"))
+            levels = _trade_levels(ltp, atr, regime=r.get("regime", "neutral"),
+                                   resistance=r.get("resistance"))
             r.update(levels)
 
     # Drop any remaining invalid setups (target <= entry)

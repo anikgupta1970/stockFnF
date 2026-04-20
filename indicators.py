@@ -62,6 +62,28 @@ def add_atr(df: pd.DataFrame, window: int = 14) -> pd.DataFrame:
     return df
 
 
+def add_swing_levels(df: pd.DataFrame, window: int = 5) -> pd.DataFrame:
+    """
+    Mark confirmed swing highs and lows.
+    A swing high at index i: High[i] is the highest in [i-window .. i+window].
+    Only marks candles with at least `window` bars on both sides (confirmed).
+    """
+    df = df.copy()
+    highs = df["High"].values
+    lows  = df["Low"].values
+    n     = len(highs)
+    swing_high = np.zeros(n, dtype=bool)
+    swing_low  = np.zeros(n, dtype=bool)
+    for i in range(window, n - window):
+        if highs[i] == max(highs[i - window: i + window + 1]):
+            swing_high[i] = True
+        if lows[i] == min(lows[i - window: i + window + 1]):
+            swing_low[i] = True
+    df["swing_high"] = swing_high
+    df["swing_low"]  = swing_low
+    return df
+
+
 def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """Standard daily indicators for positional analysis."""
     df = add_rsi(df)
@@ -69,7 +91,8 @@ def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df = add_bollinger_bands(df)
     df = add_moving_averages(df)
     df = add_volume_trend(df)
-    df = add_atr(df)          # needed for stop/target in general mode too
+    df = add_atr(df)
+    df = add_swing_levels(df)
     return df
 
 

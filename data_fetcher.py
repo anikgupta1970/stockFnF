@@ -217,3 +217,59 @@ def fetch_live_ltps(tickers: list, max_workers: int = 10) -> dict:
             if price is not None:
                 ltps[ticker] = price
     return ltps
+
+
+def fetch_todays_candles(tickers: list, max_workers: int = 10) -> dict:
+    """
+    Fetch today's live OHLCV candle for each ticker from NSE.
+    Returns {ticker: {"Open": x, "High": x, "Low": x, "Close": x, "Volume": x}}.
+    Used to append a live candle to historical daily data so indicators reflect
+    today's intraday price action, not just yesterday's close.
+    """
+    session = _nse_session()
+
+    def _candle(ticker):
+        symbol = ticker.replace(".NS", "").replace(".BO", "")
+        try:
+            # First call: OHLC + last price
+            r1 = session.get(
+                f"https://www.nseindia.com/api/quote-equity?symbol={symbol}",
+                headers=_NSE_HEADERS, timeout=8,
+            ).json()
+            pi = r1["priceInfo"]
+            ild = pi["intraDayHighLow"]
+            open_  = float(pi["open"])
+            high   = float(ild["max"])
+            low    = float(ild["min"])
+            close  = float(pi["lastPrice"])
+
+            # Second call: volume
+            r2 = session.get(
+                f"https://www.nseindia.com/api/quote-equity?symbol={symbol}&section=trade_info",
+                headers=_NSE_HEADERS, timeout=8,
+            ).json()
+            volume = int(r2["securityWiseDP"]["quantityTraded"])
+
+            return ticker, {"Open": open_, "High": high, "Low": low,
+                            "Close": close, "Volume": volume}
+        except Exception:
+            return ticker, None
+
+    candles = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        for ticker, candle in executor.map(_candle, tickers):
+            if candle is not None:
+                candles[ticker] = candle
+    return candles
+
+
+def append_todays_candle(df: pd.DataFrame, candle: dict) -> pd.DataFrame:
+    """
+    Append (or replace) today's live candle in a daily OHLCV DataFrame.
+    Ensures indicators computed on this df reflect today's intraday move.
+    """
+    today = pd.Timestamp(datetime.date.today()).tz_localize(df.index.tz)
+    row   = pd.DataFrame([candle], index=[today])
+    # Drop any existing row for today (partial candle from yfinance) then append
+    df = df[df.index.normalize() != today.normalize()]
+    return pd.concat([df, row]).sort_index()
